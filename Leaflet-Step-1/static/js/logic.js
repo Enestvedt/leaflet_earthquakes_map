@@ -1,7 +1,7 @@
 const api_link = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson";
 
 var myMap = L.map("map", {
-    center: [37.7749, -122.419],
+    center: [13.6929, -89.2182],
     zoom: 3
 });
 
@@ -47,7 +47,7 @@ function getFillColor(value) {
 
 function addMarker(feature, latlng) {
     return L.circleMarker(latlng, {
-        radius: (+feature.properties.mag) * 1.5, // + casts to number
+        radius: ((+feature.properties.mag) -3) ** 2, // + casts to number
         fillColor: getFillColor(+feature.geometry.coordinates[2]),
         color: "#000",
         weight: 1,
