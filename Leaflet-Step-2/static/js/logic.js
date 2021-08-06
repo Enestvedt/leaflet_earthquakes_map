@@ -1,8 +1,17 @@
-const api_link = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson";
+// links to the plate boundaries and earthquake data sources
+const platesLink = "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json"
+const apiLink = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson";
 
+// create layer groups for each data set
+plates = new L.LayerGroup();
+earthquakes = new L.LayerGroup();
 
+const overlayMaps = { // object containing controller options
+    "Plate Boundaries": plates, 
+    "Earthquakes": earthquakes 
+}
 
-// Create tile layer options
+// define the different types of map tiles that users may select
 const satellite = L.tileLayer("https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
     attribution: "© <a href='https://www.mapbox.com/about/maps/'>Mapbox</a> © <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a> <strong><a href='https://www.mapbox.com/map-feedback/' target='_blank'>Improve this map</a></strong>",
     tileSize: 512,
@@ -12,47 +21,41 @@ const satellite = L.tileLayer("https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{
     accessToken: API_KEY
 });
 
-var light = L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
+const light = L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
     attribution: "Map data &copy; <a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"https://creativecommons.org/licenses/by-sa/2.0/\">CC-BY-SA</a>, Imagery © <a href=\"https://www.mapbox.com/\">Mapbox</a>",
     maxZoom: 18,
     id: "light-v10",
     accessToken: API_KEY
 });
 
-var dark = L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
+const dark = L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}", {
     attribution: "Map data &copy; <a href=\"https://www.openstreetmap.org/\">OpenStreetMap</a> contributors, <a href=\"https://creativecommons.org/licenses/by-sa/2.0/\">CC-BY-SA</a>, Imagery © <a href=\"https://www.mapbox.com/\">Mapbox</a>",
     maxZoom: 18,
     id: "dark-v10",
     accessToken: API_KEY
 });
 
-// Data for toggle menu
-var baseMaps = {
+// object containing controller options to select map tiles
+const baseMaps = { 
     "Satellite": satellite,
     "Light": light,
     "Dark": dark
 };
 
-var myMap = L.map("map", {
-    center: [13.6929, -89.2182],
+// create map object to add to map
+const myMap = L.map("map", { // connects map to html "map" div and assigns attributes from this object
+    center: [13.6929, -89.2182], // center on San Salvador
     zoom: 3,
-    layers: [satellite]
+    layers: [satellite, earthquakes]
 });
 
-d3.json(api_link).then(function (data) {
-    console.log(data);
-    // Creating a GeoJSON layer with the retrieved data
-    createMap(data);
-});
+// create the control layer and add everything to the map
+L.control.layers(baseMaps, overlayMaps, { 
+    collapsed: false,
+}).addTo(myMap);
 
-function createMap(data) {
-    L.geoJson(data, {
-        pointToLayer: addMarker,
-        onEachFeature: addPopup
-    }).addTo(myMap);
-}
-
-const markerColors = [
+// function to set colors of markers and the legend
+const markerColors = [ // object that provides ranges and colors
     { range: [-10, 10], name: "Green", markerColor: "rgb(150,250,4)" },
     { range: [10, 30], name: "Light Green", markerColor: "rgb(212,246,11)" },
     { range: [30, 50], name: "Light Orange", markerColor: "rgb(244,214,18)" },
@@ -68,49 +71,67 @@ function getFillColor(value) {
     return markerColors[myIndex].markerColor;
 }
 
+// retrieve data and create map objects
+d3.json(platesLink).then(function (plateData) {
+    console.log(plateData); // data object contains unnecessary information
 
-function addMarker(feature, latlng) {
-    return L.circleMarker(latlng, {
-        radius: ((+feature.properties.mag) -3) ** 2, // + casts to number
-        fillColor: getFillColor(+feature.geometry.coordinates[2]),
-        color: "#000",
-        weight: 1,
-        opacity: .25,
-        fillOpacity: .4
+    L.geoJson(plateData, { // set attributes, add to layer group and add to map
+        color: "maroon",
+        weight: 3
+    }).addTo(plates);
+    plates.addTo(myMap);
+
+    d3.json(apiLink).then(function (earthquakeData) {
+        console.log(earthquakeData); // data object contains unnecessary information
+
+        L.geoJSON(earthquakeData.features, {
+            pointToLayer: addMarker, //function below
+            onEachFeature: addPopup //function below
+        }).addTo(earthquakes);
+
+        earthquakes.addTo(myMap);
+
+        function addPopup(feature, layer) {
+            let place = feature.properties.place;
+            let mag = feature.properties.mag;
+            let dateString = new Date(feature.properties.time).toUTCString();
+    
+            popUp = `<div><strong>${place}</strong></div><hr><div><strong>time:</strong> ${dateString}</div><div><strong>magnitude:</strong> ${mag}</div>`;
+            layer.bindPopup(popUp);
+        }
+    
+        function addMarker(feature, latlng) { // creates a circle instead of default marker
+            return L.circleMarker(latlng, {
+                radius: ((+feature.properties.mag) - 3) ** 2, // + casts to number
+                fillColor: getFillColor(+feature.geometry.coordinates[2]), // call getFillColor function
+                color: "#000",
+                weight: 1,
+                opacity: .25,
+                fillOpacity: .4
+            });
+        }
     });
-}
+});
 
-function addPopup(feature, layer) {
-    let place = feature.properties.place;
-    let mag = feature.properties.mag;
-    let time = feature.properties.time;
+// add a legend to the map
+const legend = L.control({ position: 'bottomright' });
 
-    let dateString = new Date(time).toUTCString();
-    popUp = `<div>${place}</div><hr><div>time: ${dateString}</div><div>magnitude: ${mag}</div>`;
-    layer.bindPopup(popUp);
-}
-
-L.control.layers(baseMaps, {
-    // collapsed: false,
-}).addTo(myMap);
-
-var legend = L.control({ position: 'bottomright' });
 legend.onAdd = function (myMap) {
-
-    var div = L.DomUtil.create('div', 'info legend'),
+    console.log("creating legend");
+    console.log(markerColors);
+    div = L.DomUtil.create('div', 'info legend'), // start with legend formatting and title
         labels = ["<strong>Depth</strong><hr style='height:3px; color:rgb(60,90,180); background-color:rgb(60,90,180); margin: 5px 0px -8px 0px;'>"];
 
-    // loop through our density intervals and generate a label with a colored square for each interval
-    markerColors.forEach((mColor) => {
+    markerColors.forEach((mColor) => {    // loop through our density intervals and generate a label with a colored square for each interval
+        console.log(mColor);
         div.innerHTML +=
-            labels.push(
+            labels.push( //write html for each legend item and store in labels array
                 '<i style="background:' + getFillColor(mColor.range[0]) + '"></i> ' +
                 mColor.range[0] + (mColor.range[1] ? '&ndash;' + mColor.range[1] + '<br>' : '+')
             );
-    }
-    );
+    });
     div.innerHTML = labels.join('<br>');
     return div;
 };
-
+// add legend to map
 legend.addTo(myMap);
