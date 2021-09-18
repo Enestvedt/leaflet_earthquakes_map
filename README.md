@@ -14,3 +14,5 @@
 - toggles for data sets overlays that can be turned on and off independently
 - layer controls
 
+![app screenshot](images/ScreenShot.png)
+
